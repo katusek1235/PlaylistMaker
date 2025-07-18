@@ -2,17 +2,17 @@ from pathlib import Path
 from sys import exit
 from os.path import sep as path_sep
 
-def add_to_playlist(playlist_name,video_name):
-    print("Playlist: " + playlist_name)
-    print("Video: " + video_name)
-    pass
-
-playlist_separator = " | "
 playlist_base_name = "muzyka"
 playlist_dir = Path("D:\\muzyka")
 exclusions = {Path("ting"), Path("sfx"), Path("midi"), Path("FL"),
               Path("moja muzyka"), Path("hard") / "dwarfs"}
 global_exclusions = {"converted"}
+playlist_separator = " | "
+
+def add_to_playlist(playlist_name,video_name):
+    print("Playlist: " + playlist_name)
+    print("Video: " + video_name)
+    pass
 
 for file in playlist_dir.rglob("*"):
     if any([file.is_relative_to(playlist_dir / ex) for ex in exclusions]):
