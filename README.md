@@ -11,6 +11,8 @@ A python script that makes a youtube playlist with original videos of all files 
 
 # Dependencies
 
+[Python > v3.5 (not tested)](https://www.python.org/)
+
 [google-api-python-client](https://pypi.org/project/google-api-python-client/)
 
 [google-auth-oauthlib](https://pypi.org/project/google-auth-oauthlib/)
