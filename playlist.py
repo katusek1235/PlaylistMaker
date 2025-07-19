@@ -3,28 +3,29 @@ from googleapiclient.discovery import Resource
 from pathlib import Path
 from sys import exit, platform, argv
 import yt_api
+import json
 import stat
 import os
 import re
 
-playlist_base_name = "muzyka"
-playlist_dir = Path("D:\\muzyka")
-exclusions: List[Path] = [Path("ting"), Path("sfx"), Path("midi"), Path("FL"),
-                          Path("moja muzyka"), Path("hard") / "dwarfs", Path("GD"),
-                          Path("tuba"), Path("undertale"), Path("subnautica"),
-                          Path("niklas gustavsson"), Path("nu11"), Path("factorio"),
-                          Path("creeper-world-3")]
-global_exclusions: List[str]  = [os.path.sep + "converted" + os.path.sep]
-prefixes_to_remove: List[str] = [r"yt1s.com - "]   # can be a regex expression
-suffixes_to_remove: List[str] = [r"-\(.*\)"]       # can be a regex expression
-playlist_separator = " | "
+playlist_base_name: str = ''
+playlist_dir: Path = Path()
+exclusions: List[Path] = []
+global_exclusions: List[str]  = []
+prefixes_to_remove: List[str] = []
+suffixes_to_remove: List[str] = []
+playlist_separator: str = ''
 
 total_videos_count:int = 0
 playlists:OrderedDict[str,List[str]] = OrderedDict()
 lost_media:OrderedDict[str,List[str]] = OrderedDict()
 
-cost_limit:int = 9000
-save_file: Path = Path("save.txt")
+cost_limit: int = 9000 # 1000 headroom
+video_cost: int = 150 # search + add to playlist
+playlist_cost: int = 50 # creating playlist
+
+save_file: Path = Path.cwd() / "save.txt"
+config_file: Path = Path.cwd() / "playlist.json"
 
 run_data: List = [0,0,""] # playlist_idx:int,video_idx:int,playlist_id:str
 
@@ -130,8 +131,8 @@ def save_and_exit() -> None:
     print("Exiting!")
     exit(0)
     
-def check_cost(used_cost:int) -> None:
-    if used_cost > cost_limit - 50:
+def check_cost(used_cost:int,next_cost:int) -> None:
+    if used_cost > cost_limit - next_cost:
         print("Used: " + str(used_cost) + " cost! Saving...")
         save_and_exit()
     
@@ -147,24 +148,23 @@ def upload_everything() -> None:
     start_video: int    = run_data[1]
     playlist_id: str    = run_data[2]
     for playlist_idx in range(start_playlist, len(playlists)):
-        check_cost(used_cost)
+        is_saved_playlist: bool = playlist_idx == start_playlist
+        check_cost(used_cost,video_cost if is_saved_playlist else playlist_cost)
         run_data[0] = playlist_idx
         
         playlist_name:str = list(playlists.keys())[playlist_idx]
         videos_list:List[str] = list(playlists.values())[playlist_idx]
-        if playlist_idx != start_playlist:
+        if not is_saved_playlist:
             playlist_id = upload_new_playlist(youtube,playlist_name)
             run_data[2] = playlist_id
-        used_cost += 50
-        
-        if playlist_idx != start_playlist:
+            used_cost += playlist_cost
             start_video = 0
         
         for video_idx in range(start_video, len(videos_list)):
-            check_cost(used_cost)
+            check_cost(used_cost,video_cost)
             run_data[1] = video_idx
             upload_video(youtube,videos_list[video_idx],playlist_id)
-            used_cost += 50
+            used_cost += video_cost
 
 def get_video_idx(name: str) -> List[tuple[str,int,int]]: # returns list of matching video_name, playlist_idx and video_idx
     iterate_playlist_folder(playlist_dir)
@@ -177,7 +177,29 @@ def get_video_idx(name: str) -> List[tuple[str,int,int]]: # returns list of matc
 
     return matching_videos
 
+def read_config() -> None:
+    global playlist_base_name
+    global playlist_dir      
+    global exclusions        
+    global global_exclusions 
+    global prefixes_to_remove
+    global suffixes_to_remove
+    global playlist_separator
+
+    json_config: dict = {}
+    with open(config_file,"rb") as config:
+        json_config = json.load(config)
+    
+    playlist_base_name = str(           json_config["playlist_base_name"])
+    playlist_dir       = Path(          json_config["playlist_dir"      ])
+    exclusions         = list(map(Path, json_config["exclusions"        ]))
+    global_exclusions  = list(map(str,  json_config["global_exclusions" ]))
+    prefixes_to_remove = list(map(str,  json_config["prefixes_to_remove"]))
+    suffixes_to_remove = list(map(str,  json_config["suffixes_to_remove"]))
+    playlist_separator = str(           json_config["playlist_separator"])
+
 if __name__ == "__main__":
+    read_config()
     if len(argv) > 1:
         matching_videos: List[tuple[str,int,int]] = get_video_idx(argv[1])
         print("Matching videos: ")
@@ -189,7 +211,7 @@ if __name__ == "__main__":
     iterate_playlist_folder(playlist_dir)
     print("Videos:" + str(total_videos_count))
     print("Playlists: " + str(len(playlists.keys())))
-    print("Total Cost: " + str((total_videos_count * 50) + (len(playlists.keys()) * 50)))
+    print("Total Cost: " + str((total_videos_count * video_cost) + (len(playlists.keys()) * playlist_cost)))
     sure:str = input("Are you sure you want to upload? (y or n)")
     if "y" in sure:
         yt_api.FAIL_FUNCTION = save_and_exit

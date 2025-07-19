@@ -7,7 +7,14 @@
 
 # Playlist maker
 
-A python script that makes a youtube playlist with original videos of all files in a directory
+A python script that iterates over a directory and all of its subdirectories and searches youtube for every file it finds then it creates a playlist with the specified name (and subdirectory if its in)
+
+because google has a daily quota of 10.000 "cost" and calls to their api have their cost:
+- search 100
+- add to playlist 50
+- create playlist 50
+
+this script calculates the cost needed to upload the playlist and automatially stop when the quota is reached then saves the progress and allows you to resume it the next day 
 
 # Dependencies
 
@@ -24,12 +31,24 @@ A python script that makes a youtube playlist with original videos of all files 
 to use this you have to:
 - Create or open an existing Google Cloud project and enable youtube v3 api in it
 - download the client_secret.json
-- set the:
-- - playlist_base_name to the name of the playlist
-- - playlist_dir to the path of the directory with videos or music
-- - exclusions to a list of excluded subdirectories or files
-- - global_exclusions to to a list of excluded strings
-- - playlist_separator to a string separating playlist name and the subdirectory name
+  
+### playlist.json
+
+this file contains the configuration for the script:
+
+```
+{
+    "playlist_base_name": "<name of the youtube playlist>",
+    "playlist_dir": "<path to the playlist folder on the disk>",
+    "exclusions": [
+        <list of excluded subdirectories and files>
+    ],
+    "global_exclusions": [<list of excluded strings>],
+    "prefixes_to_remove": [<list of prefixes that will be removed when searching (regex)>],
+    "suffixes_to_remove": [<list of suffixes that will be removed when searching (regex)>],
+    "playlist_separator": "<separator between the playlist name and the subdirectory name>"
+}
+```
   
 ##### Running
 
