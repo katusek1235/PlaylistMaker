@@ -1,4 +1,5 @@
-from typing import Optional, Dict
+from typing import Optional
+from types import FunctionType
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build, Resource
 from google.auth.transport.requests import Request
@@ -11,6 +12,7 @@ from sys import exit
 # Scope for full access to YouTube account
 SCOPES: list[str] = ['https://www.googleapis.com/auth/youtube']
 TOKEN_FILE: Path = Path.cwd() / 'user_token.json'
+FAIL_FUNCTION: FunctionType = exit
 
 def get_authenticated_service() -> Resource:
     creds: Optional[Credentials] = None
@@ -50,7 +52,12 @@ def add_video_to_playlist(youtube, video_id, playlist_id) -> None:
             }
         }
     )
-    response = request.execute()
+    try:
+        response = request.execute()
+    except Exception as e:
+        print("Failed to add video to Playlist with Error: " + str(e))
+        FAIL_FUNCTION()
+        
     print(f"Added video {video_id} to playlist {playlist_id}")
 
 def create_playlist(youtube: Resource, name: str) -> str:
@@ -62,12 +69,16 @@ def create_playlist(youtube: Resource, name: str) -> str:
             }
         }
     )
-    response = request.execute()
+    try:
+        response = request.execute()
+    except Exception as e:
+        print("Failed to Create a Playlist with Error: " + str(e))
+        FAIL_FUNCTION()
     playlist_id = response['id']
     print(f"Created playlist {name} with id {playlist_id}")
     return playlist_id
 
-def get_simmilar_video(youtube: Resource, name: str) -> tuple[str,str]: # returns (video_id,title)
+def get_simmilar_video(youtube: Resource, name: str) -> Optional[tuple[str,str]]: # returns (video_id,title)
     request = youtube.search().list( # type: ignore
         part='snippet',
         q=name,
@@ -75,7 +86,14 @@ def get_simmilar_video(youtube: Resource, name: str) -> tuple[str,str]: # return
         maxResults=1,
         fields='items(id(videoId),snippet(title))'
     )
-    response = request.execute()
+    try:
+        response = request.execute()
+    except Exception as e:
+        print("Failed to Search for a video with Error: " + str(e))
+        FAIL_FUNCTION()
+    if len(response.get('items', [])) == 0:
+        print(f"Cant Find video to search query {name}")
+        return None
     item = response.get('items', [])[0]
     video_id: str = item['id']['videoId']
     title: str = item['snippet']['title']
