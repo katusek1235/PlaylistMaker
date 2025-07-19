@@ -1,109 +1,49 @@
-from typing import Optional
-from types import FunctionType
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build, Resource
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from selenium.webdriver.common.driver_finder import DriverFinder
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.remote.webelement import WebElement
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.firefox.options import Options
+from selenium.webdriver.common.by import By
+from collections import OrderedDict
+from typing import Optional,List
+from selenium import webdriver
 from pathlib import Path
+from time import sleep
 from sys import exit
 
-# best docs: https://developers.google.com/resources/api-libraries/documentation/youtube/v3/python/latest/?hl=en
+SEARCH_SELECTOR = '.ytSearchboxComponentSearchButton > yt-icon:nth-child(1) > span:nth-child(1) > div:nth-child(1)'
+SEARCH_BOX_SELECTOR = '.ytSearchboxComponentInput'
+VIDEO_SELECTOR = 'ytd-video-renderer.ytd-item-section-renderer:nth-child(1) > div:nth-child(1) > div:nth-child(2) > div:nth-child(1) > div:nth-child(1) > h3:nth-child(1) > a:nth-child(2)'
 
-# Scope for full access to YouTube account
-SCOPES: list[str] = ['https://www.googleapis.com/auth/youtube']
-TOKEN_FILE: Path = Path.cwd() / 'user_token.json'
-FAIL_FUNCTION: FunctionType = exit
+def get_elem(css_selector:str) -> WebElement:
+    return WebDriverWait(driver,60).until(EC.element_to_be_clickable((By.CSS_SELECTOR,css_selector)))
 
-def get_authenticated_service() -> Resource:
-    creds: Optional[Credentials] = None
-    
-    # Load existing token if available
-    if TOKEN_FILE.exists():
-        creds = Credentials.from_authorized_user_file(TOKEN_FILE, SCOPES)
-    
-    # Refresh or get new token
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            if len(list(Path.cwd().rglob("client_secret*"))) != 1:
-                print("Cant find client_secret file or there is more than one!")
-                exit(1)
-            client_secrets_path: Path = list(Path.cwd().rglob("client_secret*"))[0]
-            flow: InstalledAppFlow = InstalledAppFlow.from_client_secrets_file(client_secrets_path, SCOPES)
-            creds = flow.run_local_server(port=0) # type: ignore
-        
-        # Save token for future use
-        with open(TOKEN_FILE, 'w') as token:
-            token.write(creds.to_json()) # type: ignore
-    
-    return build('youtube', 'v3', credentials=creds)
+def init():
+    options:Options = Options()
+    options.page_load_strategy = 'normal'
+    global driver
+    driver = webdriver.Firefox(options)
+    driver.get('https://www.youtube.com/')
+    get_elem('ytd-button-renderer.ytd-consent-bump-v2-lightbox:nth-child(2) > yt-button-shape:nth-child(1) > button:nth-child(1)').click()
 
-def add_video_to_playlist(youtube, video_id, playlist_id) -> None:
-    request = youtube.playlistItems().insert( # type: ignore
-        part="snippet",
-        body={
-            "snippet": {
-                "playlistId": playlist_id,
-                "resourceId": {
-                    "kind": "youtube#video",
-                    "videoId": video_id
-                }
-            }
-        }
-    )
-    try:
-        response = request.execute()
-    except Exception as e:
-        print("Failed to add video to Playlist with Error: " + str(e))
-        FAIL_FUNCTION()
-        
-    print(f"Added video {video_id} to playlist {playlist_id}")
+def add_video_to_playlist(video_id: str, playlist_id: str) -> None:
+    print(f"add_video_to_playlist({video_id},{playlist_id})")
 
-def create_playlist(youtube: Resource, name: str) -> str:
-    request = youtube.playlists().insert( # type: ignore
-        part="snippet",
-        body={
-            "snippet": {
-                "title": name,
-            }
-        }
-    )
-    try:
-        response = request.execute()
-    except Exception as e:
-        print("Failed to Create a Playlist with Error: " + str(e))
-        FAIL_FUNCTION()
-    playlist_id = response['id']
-    print(f"Created playlist {name} with id {playlist_id}")
+def create_playlist(name: str) -> str:
+    print(f"create_playlist({name})")
+    playlist_id = name.upper()
     return playlist_id
 
-def get_simmilar_video(youtube: Resource, name: str) -> Optional[tuple[str,str]]: # returns (video_id,title)
-    request = youtube.search().list( # type: ignore
-        part='snippet',
-        q=name,
-        type='video',
-        maxResults=1,
-        fields='items(id(videoId),snippet(title))'
-    )
-    try:
-        response = request.execute()
-    except Exception as e:
-        print("Failed to Search for a video with Error: " + str(e))
-        FAIL_FUNCTION()
-    if len(response.get('items', [])) == 0:
-        print(f"Cant Find video to search query {name}")
-        return None
-    item = response.get('items', [])[0]
-    video_id: str = item['id']['videoId']
-    title: str = item['snippet']['title']
-    print(f"Found video {video_id} with title {title} to search query {name}")
-    return (video_id,title)
-
-# EXAMPLE:
-# if __name__ == "__main__":
-#     youtube = get_authenticated_service()
-#     
-#     (video_id,title) = get_simmilar_video(youtube,"Me at the zoo")
-#     playlist_id = create_playlist(youtube,"Python playlist")
-#     add_video_to_playlist(youtube,video_id,playlist_id)
+def get_simmilar_video(name: str) -> Optional[tuple[str,str]]: # returns (video_id,title)
+    get_elem(SEARCH_BOX_SELECTOR).send_keys(name)
+    # AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+    get_elem(SEARCH_SELECTOR).click()
+    video_elem: WebElement = get_elem(VIDEO_SELECTOR)
+    if video_elem.get_attribute('href') != None:
+        link:str = str(video_elem.get_attribute('href'))
+        video_id:str = link[link.find('watch?v='):]
+        title:str = str(video_elem.get_attribute('title'))
+        print((video_id,title))
+        return (video_id,title)
+    else:
+        return ('','')
