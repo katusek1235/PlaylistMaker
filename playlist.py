@@ -106,47 +106,48 @@ def iterate_playlist_folder(folder: Path) -> None:
         
         add_to_playlist(playlist_base_name + playlist_separator + str(file.parent.relative_to(folder)).replace(os.path.sep,playlist_separator),video_name)
     
-def read_save() -> tuple[int,int]: # tuple has playlist_idx ,video_idx
+def read_save() -> tuple[int,int,str]: # returns playlist_idx ,video_idx and playlist_id
     if save_file.exists():
         print("Reading save!")
         with open(save_file,"rb") as save:
             save_data:str = save.read().decode()
         save_lines = save_data.split("\n")
-        return (int(save_lines[0]),int(save_lines[1]))
+        return (int(save_lines[0]),int(save_lines[1]),save_lines[2])
     else:
-        return (0,0)
+        return (0,0,"")
     
-def save_and_exit(playlist_idx:int,video_idx:int) -> None:
-    save_data:str = str(playlist_idx) + "\n" + str(video_idx)
+def save_and_exit(playlist_idx:int,video_idx:int,playlist_id:str) -> None:
+    save_data:str = str(playlist_idx) + "\n" + str(video_idx) + "\n" + str(playlist_id)
     with open(save_file,"wb") as save:
         save.write(save_data.encode())
     print("Exiting!")
     exit(0)
     
-def check_cost(used_cost:int,playlist_idx:int,video_idx:int) -> None:
+def check_cost(used_cost:int,playlist_idx:int,video_idx:int,playlist_id:str) -> None:
     if used_cost > cost_limit - 50:
         print("Used: " + str(used_cost) + " cost! Saving...")
-        save_and_exit(playlist_idx,video_idx)
+        save_and_exit(playlist_idx,video_idx,playlist_id)
     
 def upload_everything() -> None:
     youtube: Resource = yt_api.get_authenticated_service()
     used_cost: int = 0
     
-    (start_playlist,start_video) = read_save()
+    (start_playlist,start_video,playlist_id) = read_save()
     
     for playlist_idx in range(start_playlist, len(playlists)):
-        check_cost(used_cost,playlist_idx,0)
+        check_cost(used_cost,playlist_idx,0,"")
         
         playlist_name:str = list(playlists.keys())[playlist_idx]
         videos_list:List[str] = list(playlists.values())[playlist_idx][0]
-        playlist_id:str = upload_new_playlist(youtube,playlist_name)
+        if playlist_idx != start_playlist:
+            playlist_id = upload_new_playlist(youtube,playlist_name)
         used_cost += 50
         
         if playlist_idx != start_playlist:
             start_video = 0
         
         for video_idx in range(start_video, len(videos_list)):
-            check_cost(used_cost,playlist_idx,video_idx)
+            check_cost(used_cost,playlist_idx,video_idx,playlist_id)
             upload_video(youtube,videos_list[video_idx],playlist_id)
             used_cost += 50
 
